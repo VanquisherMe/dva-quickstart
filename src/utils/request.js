@@ -1,30 +1,70 @@
-import fetch from 'dva/fetch';
+import axios from 'axios'
+import qs from 'qs'
+import lodash from 'lodash'
 
-function parseJSON(response) {
-  return response.json();
-}
+import { message } from 'antd'
+import { YQL, CORS } from './config'
+const successStatus = 1000;
+const errorStatus = [900,101];
 
-function checkStatus(response) {
-  if (response.status >= 200 && response.status < 300) {
-    return response;
+const fetch = (options) => {
+  let {
+    method = 'get',
+    data,
+    fetchType,
+    url,
+  } = options
+
+  const cloneData = lodash.cloneDeep(data)
+
+  switch (method.toLowerCase()) {
+    case 'get':
+      return axios.get(url, {
+        params: cloneData,
+      })
+    case 'delete':
+      return axios.delete(url, {
+        data: cloneData,
+      })
+    case 'post':
+      return axios.post(url, cloneData)
+    case 'put':
+      return axios.put(url, cloneData)
+    case 'patch':
+      return axios.patch(url, cloneData)
+    default:
+      return axios(options)
   }
-
-  const error = new Error(response.statusText);
-  error.response = response;
-  throw error;
 }
 
-/**
- * Requests a URL, returning a promise.
- *
- * @param  {string} url       The URL we want to request
- * @param  {object} [options] The options we want to pass to "fetch"
- * @return {object}           An object containing either "data" or "err"
- */
-export default function request(url, options) {
-  return fetch(url, options)
-    .then(checkStatus)
-    .then(parseJSON)
-    .then(data => ({ data }))
-    .catch(err => ({ err }));
+export default function request (options) {
+
+  return fetch(options).then((response) => {
+    // console.log(response)
+    const { statusText, status } = response
+    let data = response.data
+    if (data instanceof Array) {
+      data = {
+        list: data,
+      }
+    }
+    return {
+      message: statusText,
+      statusCode: status,
+      ...data
+    }
+  }).catch((error) => {
+    const { response } = error
+    let msg
+    let statusCode
+    if (response && response instanceof Object) {
+      const { data, statusText } = response
+      statusCode = response.status
+      msg = data.message || statusText
+    } else {
+      statusCode = 600
+      msg = error.message || 'Network Error'
+    }
+    return { success: false, statusCode, message: msg }
+  })
 }
